@@ -1,0 +1,132 @@
+@charset "utf-8";
+
+
+
+
+/* Revert tab throbber - for Nightly 57 as of 9/20/2017 */
+.tab-throbber[busy]::before {
+    background-image: url("chrome://global/skin/icons/loading.png") !important;
+    animation: unset !important;
+}
+.tab-throbber[busy]:not([progress])::before {
+    /* Grays the blue during "Connecting" state */
+    filter: grayscale(100%);
+}
+@media (min-resolution: 2dppx) {
+    .tab-throbber[busy]::before {
+        background-image: url("chrome://global/skin/icons/loading@2x.png") !important;
+    }
+}
+
+/* 　右クリックメニューから「他のタブをすべて閉じる」を消す */
+#tabContextMenu #context_closeOtherTabs {
+    visibility: collapse !important;
+    display: none !important;
+}
+
+
+/* 未読タブの文字色を指定する */
+/*
+.tabbrowser-tab[unread="true"] .tab-text {color: red !important;}
+*/
+
+
+/* 選択中のタブ */
+.tabbrowser-tab[selected] .tab-text {
+    font-weight: bold !important;
+}
+
+/* 未読タブのタイトル文字色の変更 */
+.tabbrowser-tab[unread="true"] .tab-text {
+    font-weight: bold !important;
+    color: red !important;
+}
+
+/* 非ロードTabのタイトル文字色の変更 */
+.tabbrowser-tab[pending="true"] .tab-text {
+    color: #1E0EBE !important;
+}
+
+
+
+#bookmarksPanel, #history-panel {
+    font-size: 16px !important;
+    font-family: "Meiryo UI" !important;
+}
+
+
+
+
+
+
+
+
+
+
+
+/* barre de NAVIGATION */
+#nav-bar {
+    -moz-box-ordinal-group: 1 !important;
+    margin-top: -2px !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* barre PERSONNELLE */
+#PersonalToolbar {
+    -moz-box-ordinal-group: 2 !important;
+}
+
+/*!* barre d'ONGLETS *!*/
+/*#TabsToolbar {*/
+/*    -moz-box-ordinal-group: 3 !important;*/
+/*}*/
+
+/* Clean up spacing */
+.titlebar-placeholder {
+    display: none !important;
+}
+
+/*!* Hides ... at the end of the address bar *!*/
+/*#pageActionButton {*/
+/*    display: none !important;*/
+/*}*/
+
+/*!* Hides star at the end of the address bar *!*/
+/*#star-button {*/
+/*    width: 0px !important;*/
+/*}*/
+
+/*!* Hides reader button at the end of the address bar *!*/
+/*#reader-mode-button,*/
+/*#readinglist-addremove-button {*/
+/*    display:none !important;*/
+/*}*/
+
+/*!* Hides empty square at start of tab bar *!*/
+/*#TabsToolbar .titlebar-placeholder[type="pre-tabs"] {*/
+/*    display:none  !important;*/
+/*}*/
+
+/* Hides hamburger button */
+#PanelUI-menu-button {
+    /*display: none !important;*/
+}
+
+/* Change bookmark icon */
+.bookmark-item[container] {
+    list-style-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAjklEQVR42mNkAIIfx2xbgVQWAwHw//9/hh9cVgxX7ny5aBs6zQEkxgg1YD2QCiBkAAgwCdowXH0u8cHQKV9w1ICBNODaC4kvH24vUHVIO/+CLANuvhJnUGVdu4PD6rAnJQYcABrgOMIN2A00wI3MaBT/+vHOQl371PP3YQYQn505rRgu3/180S50ugNIDACEZogRw/LarAAAAABJRU5ErkJggg==') !important;
+}
+
+
+
+
+
+/* 2024.11.29 タブバーの位置を変える v133 */
+#TabsToolbar
+{
+    order: 2;
+}
+
+
+

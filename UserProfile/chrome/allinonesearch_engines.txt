@@ -1,0 +1,12 @@
+http://www.google.com/search	q	google
+http://www.google.fr/search	q	google_fr
+http://www.google.de/search	q	google_de
+http://www.google.es/search	q	google_es
+http://search.yahoo.com/search	p	yahoo
+http://fr.search.yahoo.com/search	p	yahoo_fr
+http://de.search.yahoo.com/search	p	yahoo_de
+http://es.search.yahoo.com/search	p	yahoo_es
+http://www.altavista.com/web/results	q	altavista
+http://fr.altavista.com/web/results	q	altavista_fr
+http://de.altavista.com/web/results	q	altavista_de
+http://es.altavista.com/web/results	q	altavista_es
