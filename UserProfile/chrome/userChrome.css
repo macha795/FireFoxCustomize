@@ -5,7 +5,7 @@
 
 /* Revert tab throbber - for Nightly 57 as of 9/20/2017 */
 .tab-throbber[busy]::before {
-    background-image: url("chrome://global/skin/icons/loading.png") !important;
+    background-image: url("chrome://global/skin/icons/loading.svg") !important;
     animation: unset !important;
 }
 .tab-throbber[busy]:not([progress])::before {
@@ -14,7 +14,7 @@
 }
 @media (min-resolution: 2dppx) {
     .tab-throbber[busy]::before {
-        background-image: url("chrome://global/skin/icons/loading@2x.png") !important;
+        background-image: url("chrome://global/skin/icons/loading.svg") !important;
     }
 }
 
