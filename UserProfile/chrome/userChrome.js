@@ -1,4 +1,4 @@
-/* :::::::: Sub-Script/Overlay Loader v3.0.64mod no bind version ::::::::::::::: */
+/* :::::::: Sub-Script/Overlay Loader v3.0.79mod no bind version ::::::::::::::: */
 
 // automatically includes all files ending in .uc.xul and .uc.js from the profile's chrome folder
 
@@ -14,6 +14,12 @@
 // 4.Support window.userChrome_js.loadOverlay(overlay [,observer]) //
 // Modified by Alice0775
 //
+// @version       2025/01/05 fix error handler
+// @version       2025/01/04 add error handler
+// @version       2025/01/03 use ChromeUtils.compileScript if async
+// @version       2024/12/25 load script async if meta has @async true. nolonger use @charset
+// @version       2023/09/07 remove to use nsIScriptableUnicodeConverter and AUTOREMOVEBOM
+// @version       2022/03/15 fix UCJS_loader
 // @version       2022/08/26 Bug 1695435 - Remove @@hasInstance for IDL interfaces in chrome context
 // @version       2022/08/26 fix load sidebar
 // @version       2022/04/01 remove nsIIOService
@@ -77,11 +83,13 @@
 
 (function(){
   "use strict";
+  var { AppConstants } = AppConstants || ChromeUtils.importESModule(
+  "resource://gre/modules/AppConstants.sys.mjs"
+  );
   // -- config --
   const EXCLUDE_CHROMEHIDDEN = false; //chromehiddenなwindow(popup等)ではロード: しないtrue, する[false]
   const USE_0_63_FOLDER = true; //0.63のフォルダ規則を使う[true], 使わないfalse
-  const FORCESORTSCRIPT = false; //強制的にスクリプトをファイル名順でソートするtrue, しない[false]
-  const AUTOREMOVEBOM   = false;  //BOMを自動的に, 取り除く:true, 取り除かない[false](元ファイルは.BOMとして残る)
+  const FORCESORTSCRIPT = (AppConstants.platform != "win") ? true : false; //強制的にスクリプトをファイル名順でソートするtrue, しない[false]
   const REPLACECACHE = true; //スクリプトの更新日付によりキャッシュを更新する: true , しない:[false]
   //=====================USE_0_63_FOLDER = falseの時===================
   var UCJS      = new Array("UCJSFiles","userContent","userMenu"); //UCJS Loader 仕様を適用 (NoScriptでfile:///を許可しておく)
@@ -131,7 +139,6 @@
     arrSubdir: arrSubdir,
     FORCESORTSCRIPT: FORCESORTSCRIPT,
     ALWAYSEXECUTE: ALWAYSEXECUTE,
-    AUTOREMOVEBOM: AUTOREMOVEBOM,
     INFO: INFO,
     BROWSERCHROME: BROWSERCHROME,
     EXCLUDE_CHROMEHIDDEN: EXCLUDE_CHROMEHIDDEN,
@@ -214,9 +221,7 @@ var Start = new Date().getTime();
             var file = files.getNext().QueryInterface(Ci.nsIFile);
             if(/\.uc\.js$|\.uc\.xul$/i.test(file.leafName)
                || /\.xul$/i.test(file.leafName) && /\xul$/i.test(this.arrSubdir[i])) {
-              var script = getScriptData(
-                              this.AUTOREMOVEBOM ? deleteBOMreadFile(file) : readFile(file, true)
-                              ,file);
+              var script = getScriptData(readFile(file, true) ,file);
               script.dir = dir;
               if(/\.uc\.js$/i.test(script.filename)){
                 script.ucjs = checkUCJS(script.file.path);
@@ -259,7 +264,7 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
 
       //メタデータ収集
       function getScriptData(aContent,aFile){
-        var charset, description;
+        var charset, description, async;
         var header = (aContent.match(/^\/\/ ==UserScript==[ \t]*\n(?:.*\n)*?\/\/ ==\/UserScript==[ \t]*\n/m) || [""])[0];
         var match, rex = { include: [], exclude: []};
         while ((match = findNextRe.exec(header)))
@@ -274,6 +279,12 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
         //try
         if(match)
           charset = match.length > 0 ? match[1].replace(/^\s+/,"") : "";
+
+        match = header.match(/\/\/ @async\b(.+)\s*/i);
+        async = "";
+        //try
+        if(match)
+          async = match.length > 0 ? match[1].replace(/^\s+/,"") : "";
 
         match = header.match(/\/\/ @description\b(.+)\s*/i);
         description = "";
@@ -292,6 +303,7 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
           //namespace: "",
           charset: charset,
           description: description,
+          async: async,
           //code: aContent.replace(header, ""),
           regex: new RegExp("^" + exclude + "(" + (rex.include.join("|") || ".*") + ")$", "i")
         }
@@ -317,36 +329,6 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
         return content.replace(/\r\n?/g, "\n");
       }
 
-      //スクリプトファイル文字コード変換読み込み
-      function deleteBOMreadFile(aFile){
-        var UI = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].
-                      createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
-        UI.charset = "UTF-8";
-        var bytes = readBinary(aFile);
-        try {
-          if (bytes.length > 3 && bytes.substring(0,3) == String.fromCharCode(239,187,191)){
-            aFile.copyTo(null, aFile.leafName + ".BOM");
-            bytes = bytes.substring(3,bytes.length);
-            writeFile(aFile, bytes);
-            return UI.ConvertToUnicode(bytes).replace(/\r\n?/g, "\n");
-          }
-          var charset = getCharset(bytes);
-          //window.userChrome_js.debug(aFile.leafName + " " +charset);
-          if (charset == "UTF-8" || charset == "us-ascii"){
-            return UI.ConvertToUnicode(bytes).replace(/\r\n?/g, "\n");
-          } else {
-            UI.charset = charset;
-            aFile.copyTo(null, aFile.leafName + "."+UI.charset);
-            bytes = UI.ConvertToUnicode(bytes);
-            UI.charset = "UTF-8";
-            writeFile(aFile, UI.ConvertFromUnicode(bytes));
-            return bytes.replace(/\r\n?/g, "\n");
-          }
-        } catch(ex){
-          return readFile(aFile);
-        }
-      }
-
       //バイナリ読み込み
       function readBinary(aFile){
         var istream = Components.classes["@mozilla.org/network/file-input-stream;1"]
@@ -368,44 +350,6 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
         foStream.write(aData, aData.length);
         foStream.close();
         return aData;
-      }
-
-      //文字コードを得る
-      function getCharset(str){
-        function charCode(str){
-          if (/\x1B\x24(?:[\x40\x42]|\x28\x44)/.test(str))
-            return 'ISO-2022-JP';
-          if (/[\x80-\xFE]/.test(str)){
-              var buf = RegExp.lastMatch + RegExp.rightContext;
-              if (/[\xC2-\xFD][^\x80-\xBF]|[\xC2-\xDF][\x80-\xBF][^\x00-\x7F\xC2-\xFD]|[\xE0-\xEF][\x80-\xBF][\x80-\xBF][^\x00-\x7F\xC2-\xFD]/.test(buf))
-                return (/[\x80-\xA0]/.test(buf)) ? 'Shift_JIS' : 'EUC-JP';
-              if (/^(?:[\x00-\x7F\xA1-\xDF]|[\x81-\x9F\xE0-\xFC][\x40-\x7E\x80-\xFC])+$/.test(buf))
-                return 'Shift_JIS';
-              if (/[\x80-\xA0]/.test(buf))
-                return 'UTF-8';
-              return 'EUC-JP';
-          } else
-            return 'us-ascii';
-        }
-
-        var charset = charCode(str);
-        if (charset == "UTF-8" || charset == "us-ascii")
-          return charset;
-
-        //判定に失敗している場合があるので, 再チェック (鈍くさ);
-        var UI = Components.classes["@mozilla.org/intl/scriptableunicodeconverter"].
-                        createInstance(Components.interfaces.nsIScriptableUnicodeConverter);
-        try {
-          UI.charset = "UTF-8";
-          if (str === UI.ConvertFromUnicode(UI.ConvertToUnicode(str)))
-            return "UTF-8";
-        } catch(ex){}
-        try {
-          UI.charset = charset;
-          if (str === UI.ConvertFromUnicode(UI.ConvertToUnicode(str)))
-            return charset;
-        } catch(ex){}
-        return "UTF-8";
       }
 
       //prefを読み込み
@@ -561,15 +505,15 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
 
       for(var m=0,len=this.scripts.length; m<len; m++){
         script = this.scripts[m];
-      if (this.ALWAYSEXECUTE.indexOf(script.filename) < 0
-        && (!!this.dirDisable['*']
-          || !!this.dirDisable[script.dir]
-          || !!this.scriptDisable[script.filename]) ) continue;
-      if( !script.regex.test(dochref)) continue;
+        if (this.ALWAYSEXECUTE.indexOf(script.filename) < 0
+          && (!!this.dirDisable['*']
+            || !!this.dirDisable[script.dir]
+            || !!this.scriptDisable[script.filename]) ) continue;
+        if( !script.regex.test(dochref)) continue;
         if( script.ucjs ){ //for UCJS_loader
             if (this.INFO) this.debug("loadUCJSSubScript: " + script.filename);
             aScript = doc.createElementNS("http://www.w3.org/1999/xhtml", "script");
-            aScript.type = "application/javascript; version=" + maxJSVersion.toString().substr(0,3);
+            aScript.type = "text/javascript";
             aScript.src = script.url + "?" + this.getLastModifiedTime(script.file);
             try {
               doc.documentElement.appendChild(aScript);
@@ -578,17 +522,41 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
             }
         }else{ //Not for UCJS_loader
           if (this.INFO) this.debug("loadSubScript: " + script.filename);
+          let target = doc.defaultView;
+          /*
           try {
             if (script.charset)
               Services.scriptloader.loadSubScript(
                          script.url + "?" + this.getLastModifiedTime(script.file),
-                         doc.defaultView, script.charset);
+                         target, script.charset);
             else
               Services.scriptloader.loadSubScript(
                          script.url + "?" + this.getLastModifiedTime(script.file),
-                         doc.defaultView);
+                         target);
           }catch(ex) {
             this.error(script.filename, ex);
+          }
+          continue;
+          */
+          if (!script.async) {
+            try {
+              if (script.charset)
+                Services.scriptloader.loadSubScript(
+                           script.url + "?" + this.getLastModifiedTime(script.file),
+                           target, script.charset);
+              else
+                Services.scriptloader.loadSubScript(
+                           script.url + "?" + this.getLastModifiedTime(script.file),
+                           target);
+            }catch(ex) {
+              this.error(script.filename, ex);
+            }
+          } else {
+            ChromeUtils.compileScript(
+              script.url + "?" + this.getLastModifiedTime(script.file)
+            ).then((r) => {
+              r.executeInGlobal(/*global*/ target, {reportExceptions: true});
+            }).catch((ex) => {this.error(script.filename, ex);});
           }
         }
       }
