@@ -122,11 +122,26 @@
 
 
 
-/* 2024.11.29 タブバーの位置を変える v133 */
-#TabsToolbar
+
+/*<editor-fold desc="2025.07.31 垂直タブとブックマークのペイン位置変える">*/
+/** 2026.07.22 v153 垂直タブ・ツールアイコンペインのIDが変わったので調整 */
+/**
+ * ペインの横幅リサイズしやすくするためsplitterもorderを変える
+ */
+#sidebar-box {
+    order: 1 !important; /* ブックマークペイン：通常3 */
+}
+#sidebar-splitter
 {
-    order: 2;
+    order: 2 !important; /* ブックマークペインの仕切り線：通常4 */
 }
 
+#sidebar-container{
+    order: 3 !important; /* 垂直タブ・ツールアイコンペイン：通常1 */
+}
+#sidebar-launcher-splitter {
+    order: 4 !important; /* 垂直タブ・ツールアイコンペインの仕切り線：通常2 */
+}
 
+/*</editor-fold>*/
 
