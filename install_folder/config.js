@@ -1,5 +1,6 @@
 // skip 1st line
 /*
+ 2026/07/28 loadSubScript chrome:// instead of file:// (Bug 1974213 Don't allow file: and jar: schemes in Services.scriptloader.loadSubScript)
  2023/07/11 Removed Services.jsm, per Bug 1780695
  2022/06/07 remove osfile.jsm
  2021/08/05 fix for 92+ port Bug 1723723 - Switch JS consumers from getURLSpecFromFile to either getURLSpecFromActualFile or getURLSpecFromDir
@@ -38,8 +39,10 @@ try {
           file.append('userChrome.js');
           let fileURL = fph
                         .getURLSpecFromActualFile(file) + "?" + file.lastModifiedTime;
-          Cc["@mozilla.org/moz/jssubscript-loader;1"].getService(Ci.mozIJSSubScriptLoader)
-                       .loadSubScript(fileURL, document.defaultView, 'UTF-8');
+          Services.scriptloader.loadSubScriptWithOptions(fileURL, {
+                       target: document.defaultView,
+                       allowUnsafeURL: true,
+                });
         }
       },
     };

@@ -1,4 +1,4 @@
-/* :::::::: Sub-Script/Overlay Loader v3.0.82mod no bind version ::::::::::::::: */
+/* :::::::: Sub-Script/Overlay Loader v3.0.86altmod no bind version ::::::::::::::: */
 
 // automatically includes all files ending in .uc.xul and .uc.js from the profile's chrome folder
 
@@ -9,11 +9,15 @@
 // scripts without metadata will run only on the main browser window, for backwards compatibility
 //
 // 1.Including function of UCJS_loader. <--- not work in Firefox135+
-// 2.Compatible with Firefox139
+// 2.Compatible with Firefox141
 // 3.Cached script data (path, leafname, regex)
 // 4.Support window.userChrome_js.loadOverlay(overlay [,observer]) <--- not work in recent Firefox
 // Modified by Alice0775
 //
+// @version       2026/07/28 loadSubScript chrome:// instead of file:// (Bug 1974213 Don't allow file: and jar: schemes in Services.scriptloader.loadSubScript)
+// @version       2026/03/01 Bug 2017957 - Add freezeBuiltins option to Cu.Sandbox
+// @version       2025/06/16 Bug 1968479 - Only allow eval (with system principal / in the parent) when an explicit pref is set
+// @version       2025/05/11 fix extended property flag(enumerable)
 // @version       2025/04/07 default disabled sandbox
 // @version       2025/04/02 read meta @sandbox
 // @version       2025/04/02 fix loadscript uc.js into sandbox
@@ -228,6 +232,7 @@ var Start = new Date().getTime();
               script.dir = dir;
               if(/\.uc\.js$/i.test(script.filename)){
                 script.ucjs = checkUCJS(script.file.path);
+                script.LastModifiedTime = this.getLastModifiedTime(script.file);
                 s.push(script);
               }else{
                 script.xul = '<?xul-overlay href=\"'+ script.url +'\"?>\n';
@@ -282,14 +287,6 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
         //try
         if(match)
           charset = match.length > 0 ? match[1].replace(/^\s+/,"") : "";
-
-        match = header.match(/\/\/ @async\b(.+)\s*/i);
-        async = false;
-        //try
-        if(match) {
-          async = match.length > 0 ? match[1].replace(/^\s+/,"") : "";
-          async = (sandbox == "true");
-        }
         
         match = header.match(/\/\/ @sandbox\b(.+)\s*/i);
         sandbox = false; // default disable sandbox
@@ -297,6 +294,14 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
         if(match) {
           sandbox = match.length > 0 ? match[1].replace(/^\s+/,"") : "";
           sandbox = !(sandbox == "false");
+        }
+
+        match = header.match(/\/\/ @async\b(.+)\s*/i);
+        async = false;
+        //try
+        if(match) {
+          async = match.length > 0 ? match[1].replace(/^\s+/,"") : "";
+          async = sandbox;
         }
 
         match = header.match(/\/\/ @description\b(.+)\s*/i);
@@ -522,18 +527,23 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
         target = new Cu.Sandbox(win, {
             sandboxPrototype: win,
             sameZoneAs: win,
+            freezeBuiltins: false,
         });
         /* toSource() is not available in sandbox */
         Cu.evalInSandbox(`
             Function.prototype.toSource = window.Function.prototype.toSource;
+            Object.defineProperty(Function.prototype, "toSource", {enumerable : false});
             Object.prototype.toSource = window.Object.prototype.toSource;
+            Object.defineProperty(Object.prototype, "toSource", {enumerable : false});
             Array.prototype.toSource = window.Array.prototype.toSource;
+            Object.defineProperty(Array.prototype, "toSource", {enumerable : false});
         `, target);
         win.addEventListener("unload", () => {
             setTimeout(() => {
                 Cu.nukeSandbox(target);
             }, 0);
         }, {once: true});
+      this.sb = target;
 
       for(var m=0,len=this.scripts.length; m<len; m++){
         script = this.scripts[m];
@@ -553,39 +563,28 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
               this.error(script.filename, ex);
             }
         }else{ //Not for UCJS_loader
-          if (this.INFO) this.debug("loadSubScript: " + script.filename);
-          /*
-          try {
-            if (script.charset)
-              Services.scriptloader.loadSubScript(
-                         script.url + "?" + this.getLastModifiedTime(script.file),
-                         target, script.charset);
-            else
-              Services.scriptloader.loadSubScript(
-                         script.url + "?" + this.getLastModifiedTime(script.file),
-                         target);
-          }catch(ex) {
-            this.error(script.filename, ex);
-          }
-          continue;
-          */
-          
+          if (this.INFO) this.debug("loadSubScript: async:" + script.async + " sandbox:" + script.sandbox + "\n--- " + script.filename);
+
           if (!script.async) {
             try {
               if (script.charset)
-                Services.scriptloader.loadSubScript(
-                           script.url + "?" + this.getLastModifiedTime(script.file),
-                           script.sandbox ? target : doc.defaultView, script.charset);
+                Services.scriptloader.loadSubScriptWithOptions(
+                           script.url + "?" + script.LastModifiedTime, {
+                           target: script.sandbox ? target : doc.defaultView,
+                           allowUnsafeURL: true,
+                });
               else
-                Services.scriptloader.loadSubScript(
-                           script.url + "?" + this.getLastModifiedTime(script.file),
-                           script.sandbox ? target : doc.defaultView);
+                Services.scriptloader.loadSubScriptWithOptions(
+                           script.url + "?" + script.LastModifiedTime, {
+                           target: script.sandbox ? target : doc.defaultView,
+                           allowUnsafeURL: true,
+                });
             }catch(ex) {
               this.error(script.filename, ex);
             }
           } else {
             ChromeUtils.compileScript(
-              script.url + "?" + this.getLastModifiedTime(script.file)
+              script.url + "?" + script.LastModifiedTime
             ).then((r) => {
               r.executeInGlobal(/*global*/ script.sandbox ? target : doc.defaultView, {reportExceptions: true});
             }).catch((ex) => {this.error(script.filename, ex);});
@@ -608,6 +607,7 @@ this.debug('Parsing getScripts: '+((new Date()).getTime()-Start) +'msec');
       if(typeof(err) == 'object') error.init(aMsg + '\n' + err.name + ' : ' + err.message,err.fileName || null,null,err.lineNumber,null,2,err.name);
       else error.init(aMsg + '\n' + err + '\n',null,null,null,null,2,null);
       CONSOLE_SERVICE.logMessage(error);
+      Cu.reportError(err);
     }
   };
 
